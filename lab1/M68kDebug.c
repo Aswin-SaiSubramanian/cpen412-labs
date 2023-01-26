@@ -1440,7 +1440,7 @@ int get_address_range(unsigned int *start_addr, unsigned int *end_addr, unsigned
 
 int get_data_pattern(unsigned int *pattern, unsigned int width_option)
 {
-    unsigned char pattern_input[9] = "~~~~~~~~";
+    unsigned char pattern_input[9] = "";
     unsigned int i = 0, j = 0, k = 0;
 
     for (i = 0; i < 4; i++) 
@@ -1480,10 +1480,10 @@ void MemoryTest(void)
     unsigned int Start, End ;
     // char c ;
 
-    printf("\r\nStart Address: ") ;
-    Start = Get8HexDigits(0) ;
-    printf("\r\nEnd Address: ") ;
-    End = Get8HexDigits(0) ;
+    // printf("\r\nStart Address: ") ;
+    // Start = Get8HexDigits(0) ;
+    // printf("\r\nEnd Address: ") ;
+    // End = Get8HexDigits(0) ;
 
 	unsigned int pattern[4] = {0,0,0,0};
     unsigned int width_option = 0, i = 0, j = 0, value_from_mem = 0;

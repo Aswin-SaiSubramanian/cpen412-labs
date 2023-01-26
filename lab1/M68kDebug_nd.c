@@ -1301,33 +1301,35 @@ void EnterString(void)
 // Returns 0 if addresses are valid, 1 otherwise
 int get_address_range(unsigned int *start_addr, unsigned int *end_addr, unsigned int width_option)
 {
+    unsigned char c;
     scanflush();
-    printf("\nEnter a start address for the test in hex (if word or long word was selected, ensure this address is even): ");
-    scanf("%x", start_addr);
+    printf("\r\nEnter a start address for the test in hex (if word or long word was selected, ensure this address is even): ");
+    while((c = getchar()) != 0x1b) {
+        *start_addr = (*start_addr << 4) | xtod(c);
+    }
 
     scanflush();
-    printf("\nEnter an end address for the test in hex (if word or long word was selected, ensure this address is even): ");
-    scanf("%x", end_addr);
-    printf("\nStart: %x, End: %x", *start_addr, *end_addr);
+    printf("\r\nEnter an end address for the test in hex (if word or long word was selected, ensure this address is even): ");
+    while((c = getchar()) != 0x1b) {
+        *end_addr = (*end_addr << 4) | xtod(c);
+    }
+    printf("\r\nStart: %x, End: %x", *start_addr, *end_addr);
 
     // word/longword
-    if (width_option != 1 && (((*start_addr) % 2 != 0) || ((*end_addr) % 2 != 0))) 
-    {
-        printf("\nInvalid start or end address: must be even");
+    if (width_option != 1 && (((*start_addr) % 2 != 0) || ((*end_addr) % 2 != 0))) {
+        printf("\r\nInvalid start or end address: must be even");
         return 1;
     }
 
     // check addr range 0802 0000 –----- 0803 0000
-    if (*start_addr < 0x08020000 || (*start_addr + width_option) > 0x08030000 || *end_addr < 0x08020000 || (*end_addr + width_option) > 0x08030000)
-    {
-        printf("\nInvalid start or end address: must be in 0x0802 0000 to 0x0803 0000 range");
+    if (*start_addr < 0x08020000 || (*start_addr + width_option) > 0x08030000 || *end_addr < 0x08020000 || (*end_addr + width_option) > 0x08030000) {
+        printf("\r\nInvalid start or end address: must be in 0x0802 0000 to 0x0803 0000 range");
         return 1;
     }
 
     // start addr < end addr
-    if (*start_addr >= *end_addr)
-    {
-        printf("\nInvalid addresses: start address must be before or equal to end address");
+    if (*start_addr >= *end_addr) {
+        printf("\r\nInvalid addresses: start address must be before or equal to end address");
         return 1;
     }
 
@@ -1336,33 +1338,27 @@ int get_address_range(unsigned int *start_addr, unsigned int *end_addr, unsigned
 
 int get_data_pattern(unsigned int *pattern, unsigned int width_option)
 {
-    unsigned char pattern_input[9] = "~~~~~~~~";
+    unsigned char pattern_input[9] = "";
     unsigned int i = 0, j = 0, k = 0;
+    unsigned char c;
 
     for (i = 0; i < 4; i++) 
     {
         scanflush();
-        printf("\nPlease enter hexadecimal string %d of 4, of length %u characters: ", i+1, width_option*2);
-        scanf("%8s", pattern_input);
-        printf("\nPattern input: %s\n", pattern_input);
+        printf("\r\nPlease enter hexadecimal string %d of 4, of length %u characters: ", i+1, width_option*2);
+        for (k = 0; k < 2*width_option; k++) {
+            if ((c = getchar()) != 0x1b) {
+                pattern_input[k] = (char) c;
+            } else {
+                printf("\r\nHexadecimal string is not long enough");
+                return 1;
+            }
+        }
         
         j = 0;
         pattern[i] = xtod(pattern_input[j]);
-        for (j = 1; j < 2*width_option; j++) 
-        {
-            printf("\ninput %d: \'%x\'\n", j, pattern_input[j]);
-            if (pattern_input[j] == '~')
-            {
-                printf("\nHexadecimal string is not long enough");
-                return 1;
-            }
+        for (j = 1; j < 2*width_option; j++) {
             pattern[i] = (pattern[i] << 4) | xtod(pattern_input[j]); 
-        }
-        
-        printf("\npattern %u is %x", i+1, pattern[i]);
-        for (k = 0; k < 8; k++)
-        {
-            pattern_input[k] = '~';
         }
     }
     
@@ -1371,45 +1367,46 @@ int get_data_pattern(unsigned int *pattern, unsigned int width_option)
 
 void MemoryTest(void)
 {
-    // unsigned int *RamPtr, counter1=1 ;
-    // register unsigned int i ;
-    unsigned int Start, End ;
-    // char c ;
-
-    printf("\r\nStart Address: ") ;
-    Start = Get8HexDigits(0) ;
-    printf("\r\nEnd Address: ") ;
-    End = Get8HexDigits(0) ;
-
+    unsigned int Start, End;
+    unsigned char c, test;
 	unsigned int pattern[4] = {0,0,0,0};
     unsigned int width_option = 0, i = 0, j = 0, value_from_mem = 0;
 
     // GET USER INPUTS
-
     scanflush();
-    printf("\r\nSelect value width for test [1 = bytes, 2 = words, 4 = long words]: ");
-    scanf("%u", &width_option);
-    if (width_option != 1 && width_option != 2 && width_option != 4)
-    {
-        printf("\nInvalid value width selected");
+    printf("\r\nSelect value width for test [b = bytes, w = words, l = long words]: ");
+    if ((c = getchar()) != 0x1b) {
+        switch (c) {
+            case 'b':
+                width_option = 1;
+                break;
+            case 'w':
+                width_option = 2;
+                break;
+            case 'l':
+                width_option = 4;
+                break;
+            default: 
+                printf("\r\nInvalid value width selected");
+                return;
+        }
+    } else {
+        printf("\r\nNo value entered");
         return;
     }
 
-    if (get_data_pattern(pattern, width_option) != 0 || get_address_range(&Start, &End, width_option) != 0)
-    {
+    if (get_data_pattern(pattern, width_option) != 0 || get_address_range(&Start, &End, width_option) != 0) {
         return;
     }
 
     // MEMORY TEST
-    for (i = Start; i <= End; i += width_option)
-    {
-        switch(width_option) 
-        {
+    for (i = Start; i <= End; i += width_option) {
+        switch(width_option) {
             case 1:
                 *((char *)(i)) = pattern[j];
                 value_from_mem = *((char *)(i));
                 if ((unsigned char)value_from_mem != pattern[j]) {
-                    printf("\nFAIL at address %x: value written to memory was %x, value read from memory was %x", i, pattern[j], (unsigned char) value_from_mem);
+                    printf("\r\nFAIL at address %x: value written to memory was %x, value read from memory was %x", i, pattern[j], (unsigned char) value_from_mem);
                     return;
                 }
                 break;
@@ -1417,7 +1414,7 @@ void MemoryTest(void)
                 *((unsigned short int *)(i)) = pattern[j];
                 value_from_mem = *((unsigned short int *)(i));
                 if ((unsigned short int)value_from_mem != pattern[j]) {
-                    printf("\nFAIL at address %x: value written to memory was %x, value read from memory was %x", i, pattern[j], (unsigned short int) value_from_mem);
+                    printf("\r\nFAIL at address %x: value written to memory was %x, value read from memory was %x", i, pattern[j], (unsigned short int) value_from_mem);
                     return;
                 }
                 break;
@@ -1425,7 +1422,7 @@ void MemoryTest(void)
                 *((unsigned int *)(i)) = pattern[j];
                 value_from_mem = *((unsigned int *)(i));
                 if ((unsigned int)value_from_mem != pattern[j]) {
-                    printf("\nFAIL at address %x: value written to memory was %x, value read from memory was %x", i, pattern[j], (unsigned int) value_from_mem);
+                    printf("\r\nFAIL at address %x: value written to memory was %x, value read from memory was %x", i, pattern[j], (unsigned int) value_from_mem);
                     return;
                 }
                 break;
@@ -1435,13 +1432,14 @@ void MemoryTest(void)
         }
 
         // print progress
-        if ((i - Start) % 10001 == 0)
-        {
-            printf("\nAddress: %x Data read/written: %x\n", i, (unsigned int) value_from_mem);
+        if ((i - Start) % 1001 == 0) {
+            printf("\r\nAddress: %x Data read/written: %x\n", i, (unsigned int) value_from_mem);
         }
 
         j = (j + 1) % 4;
     }
+
+    printf("\r\nTest passed\n");
 }
 
 void main(void)
@@ -1449,6 +1447,8 @@ void main(void)
     char c ;
     int i, j ;
 
+    char *AlyssaInfo = "Name: Alyssa da Costa, Student Number: 13316294";
+    char *AswinInfo = "Name: Aswin Sai Subramanian, Student Number: 49513567";
     char *BugMessage = "DE1-68k Bug V1.77";
     char *CopyrightMessage = "Copyright (C) PJ Davies 2016";
 
@@ -1525,7 +1525,9 @@ void main(void)
     Oline1("By: PJ Davies") ;
 
     printf("\r\n%s", BugMessage) ;
-    printf("\r\n%s", CopyrightMessage) ;
+    printf("\r\n%s\n", CopyrightMessage) ;
+    printf("\r\n%s", AlyssaInfo) ;
+    printf("\r\n%s\n", AswinInfo) ;
 
     menu();
 }
