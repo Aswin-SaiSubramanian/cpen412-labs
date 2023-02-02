@@ -1328,7 +1328,7 @@ int get_address_range(unsigned int *start_addr, unsigned int *end_addr, unsigned
     }
 
     // start addr < end addr
-    if (*start_addr >= *end_addr) {
+    if ((*start_addr + width_option) > *end_addr) {
         printf("\r\nInvalid addresses: start address must be before or equal to end address");
         return 1;
     }
@@ -1400,7 +1400,7 @@ void MemoryTest(void)
     }
 
     // MEMORY TEST
-    for (i = Start; i <= End; i += width_option) {
+    for (i = Start; i < End; i += width_option) {
         switch(width_option) {
             case 1:
                 *((char *)(i)) = pattern[j];

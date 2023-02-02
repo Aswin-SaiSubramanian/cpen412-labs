@@ -10,6 +10,7 @@
 // Copyright PJ Davies June 2020
 //////////////////////////////////////////////////////////////////////////////////////-
 
+`define MODELSIM 1'b1
 
 module M68kDramController_Verilog (
 			input Clock,								// used to drive the state machine- stat changes occur on positive edge
@@ -64,7 +65,14 @@ module M68kDramController_Verilog (
 		
 		reg  FPGAWritingtoSDram_H;								// When '1' enables FPGA data out lines leading to SDRAM to allow writing, otherwise they are set to Tri-State "Z"
 		reg  CPU_Dtack_L;											// Dtack back to CPU
-		reg  CPUReset_L;		
+		reg  CPUReset_L;
+
+		reg  [5:0]counter;
+		reg  [3:0]nopCounter;
+
+`ifdef MODELSIM
+		reg [15:0] temp_SDram_DQ;
+`endif		
 
 		// 5 bit Commands to the SDRam
 
@@ -91,14 +99,28 @@ module M68kDramController_Verilog (
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////-
 	
 		parameter InitialisingState = 5'h00;				// power on initialising state
-		parameter WaitingForPowerUpState = 5'h01	;		// waiting for power up state to complete
-		parameter IssueFirstNOP = 5'h02;						// issuing 1st NOP after power up
+		parameter WaitingForPowerUpState = 5'h01;			// waiting for power up state to complete
+		parameter IssueFirstNOP = 5'h02;					// issuing 1st NOP after power up
 		parameter PrechargingAllBanks = 5'h03;
-		parameter Idle = 5'h04;			
-		
-		
-		// TODO - Add your own states as per your own design
-		
+
+		parameter PrechargeNop = 5'h04;
+
+		// Repeat 10 cycles of a refresh followed by 3 NOPs
+		parameter Refresh = 5'h05;	
+		parameter NopRefresh = 5'h06;
+
+		// Program Mode Register, then execute 3 NOPs
+		parameter ProgramModeRegister = 5'h07;
+		parameter ProgramModeRegisterNop = 5'h08;
+
+		parameter LoadRefreshTimer = 5'h09;
+
+		parameter Idle = 5'h0A;
+
+		parameter AutorefreshPrecharge = 5'h0B;
+		parameter AutorefreshNop = 5'h0C;
+		parameter Autorefresh = 5'h0D;
+		parameter AutorefreshNopCycle = 5'h0E;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // General Timer for timing and counting things: Loadable and counts down on each clock then produced a TimerDone signal and stops counting
@@ -170,15 +192,25 @@ module M68kDramController_Verilog (
 			// of course during a write, the dram WE signal will need to be driven low and it will respond by tri-stating its outputs lines so you can drive data in to it
 			// remember the Dram chip has bi-directional data lines, when you read from it, it turns them on, when you write to it, it turns them off (tri-states them)
 
+`ifdef MODELSIM
+			if(FPGAWritingtoSDram_H == 1) 			// if CPU is doing a write, we need to turn on the FPGA data out lines to the SDRam and present Dram with CPU data 
+				temp_SDram_DQ	<= SDramWriteData ;
+			else
+				temp_SDram_DQ	<= 16'bZZZZZZZZZZZZZZZZ;			// otherwise tri-state the FPGA data output lines to the SDRAM for anything other than writing to it
+`else 
 			if(FPGAWritingtoSDram_H == 1) 			// if CPU is doing a write, we need to turn on the FPGA data out lines to the SDRam and present Dram with CPU data 
 				SDram_DQ	<= SDramWriteData ;
 			else
 				SDram_DQ	<= 16'bZZZZZZZZZZZZZZZZ;			// otherwise tri-state the FPGA data output lines to the SDRAM for anything other than writing to it
-		
+`endif
 			DramState <= CurrentState ;					// output current state - useful for debugging so you can see you state machine changing states etc
 		end
 	end	
 	
+`ifdef MODELSIM
+	assign SDram_DQ = temp_SDram_DQ;
+`endif
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////-
 // Concurrent process to Latch Data from Sdram after Cas Latency during read
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////-
@@ -200,6 +232,28 @@ module M68kDramController_Verilog (
 // next state and output logic
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
 	
+
+	// counter and nop_counter
+	always@(posedge Clock) begin 
+		if (CurrentState == NopRefresh) begin 
+			// NopRefresh: counter and nop counter
+			counter <= counter + 1'b1;
+			nopCounter <= nopCounter + 1'b1;
+		end
+		else if (CurrentState == ProgramModeRegisterNop || CurrentState == AutorefreshNopCycle) begin 
+			// ProgramModeRegisterNop: nop counter
+			// AutorefreshNopCycle: nop counter
+			counter <= 6'b000000;
+			nopCounter <= nopCounter + 1'b1;
+		end	else if (CurrentState == Refresh) begin
+			counter <= counter + 1'b1;
+			nopCounter <= 4'b0000;
+		end else begin
+			nopCounter <= 4'b0000;
+			counter <= 6'b000000;
+		end
+	end
+
 	always@(*)
 	begin
 	
@@ -215,7 +269,7 @@ module M68kDramController_Verilog (
 	//
 	
 		Command 	<= NOP ;												// assume no operation command for Dram chip
-		NextState <= InitialisingState ;							// assume next state will always be idle state unless overridden the value used here is not important, we cimple have to assign something to prevent storage on the signal so anything will do
+		NextState <= Idle ;							// assume next state will always be idle state unless overridden the value used here is not important, we cimple have to assign something to prevent storage on the signal so anything will do
 		
 		TimerValue <= 16'h0000;										// no timer value 
 		RefreshTimerValue <= 16'h0000 ;							// no refresh timer value
@@ -234,9 +288,10 @@ module M68kDramController_Verilog (
 		// we are going to load the timer above with a value equiv to 100us and then wait for timer to time out
 	
 		if(CurrentState == InitialisingState ) begin
-			TimerValue <= 16'h0000;									// chose a value equivalent to 100us at 50Mhz clock - you might want to shorten it to somthing small for simulation purposes
+			TimerValue <= 16'd8;									// chose a value equivalent to 100us (5000 clock cycles) at 50Mhz clock - you might want to shorten it to somthing small for simulation purposes (8)
 			TimerLoad_H <= 1 ;										// on next edge of clock, timer will be loaded and start to time out
 			Command <= PoweringUp ;									// clock enable and chip select to the Zentel Dram chip must be held low (disabled) during a power up phase
+			
 			NextState <= WaitingForPowerUpState ;				// once we have loaded the timer, go to a new state where we wait for the 100us to elapse
 		end
 		
@@ -250,12 +305,109 @@ module M68kDramController_Verilog (
 		end
 		
 		else if(CurrentState == IssueFirstNOP) begin	 		// issue a valid NOP
-			Command <= NOP ;											// send a valid NOP command to the dram chip
+			Command <= NOP ;	
+													// send a valid NOP command to the dram chip
 			NextState <= PrechargingAllBanks;
-		end		
-		
+		end	
 
-		// add your other states and conditions and outputs here
+		else if(CurrentState == PrechargingAllBanks) begin 		// pre-charging all banks
+			Command <= PrechargingAllBanks;
+
+			NextState <= PrechargeNop;	
+		end	
+
+		else if (CurrentState == PrechargeNop) begin
+			Command <= NOP;	
+
+			NextState <= Refresh;
+		end
+		
+		else if (CurrentState == Refresh) begin
+			Command <= AutoRefresh;
+
+			NextState <= NopRefresh;
+		end
+
+		else if (CurrentState ==  NopRefresh) begin
+			Command <= NOP;
+
+			if (nopCounter < 3) begin // haven't done 3 NOPS after refresh
+				NextState <= NopRefresh;
+			end else if (counter < 40) begin // did 3 NOPS, haven't done 10 refresh cycles yet
+     			NextState <= Refresh;
+			end else begin // done 10 refresh cycles
+     			NextState <= ProgramModeRegister;
+			end
+		end
+
+		else if (CurrentState == ProgramModeRegister) begin
+			Command <= ModeRegisterSet;
+
+			SDram_Addr <= 13'h220; // present mode data on dram address bus
+			nopCounter <= 0;
+
+			NextState <= ProgramModeRegisterNop;
+		end
+
+		else if (CurrentState == ProgramModeRegisterNop) begin
+			Command <= NOP;
+
+			if (nopCounter < 3) begin
+			    NextState <= ProgramModeRegisterNop;
+			end else begin
+			    NextState <= LoadRefreshTimer;
+			end
+		end
+
+		else if (CurrentState == LoadRefreshTimer) begin
+			Command <= NOP;
+
+			RefreshTimerValue <= 16'd375; // 7.5us: 375 clock cycles
+			RefreshTimerLoad_H <= 1'b1;	
+			
+			NextState <= Idle;
+		end
+
+		else if (CurrentState == Idle) begin
+			Command <= NOP;
+
+			if (RefreshTimerDone_H == 1'b1) begin
+				NextState <= AutorefreshPrecharge;
+			end
+			else begin
+				NextState <= Idle;
+			end
+		end
+
+		else if (CurrentState == AutorefreshPrecharge) begin
+			Command <= PrechargeAllBanks;
+
+			NextState <= AutorefreshNop;	
+		end
+
+		else if (CurrentState == AutorefreshNop) begin
+			Command <= NOP;
+
+			NextState <= Autorefresh;
+		end
+
+		else if (CurrentState == Autorefresh) begin
+			Command <= AutoRefresh;
+			nopCounter <= 0;
+
+			NextState <= AutorefreshNopCycle;
+		end
+
+		else if (CurrentState == AutorefreshNopCycle) begin
+			Command <= NOP;
+
+			if (nopCounter < 3) begin
+			    NextState <= AutorefreshNopCycle;
+			end else begin
+			    NextState <= LoadRefreshTimer;
+			end
+
+		end
 		
 	end	// always@ block
 endmodule
