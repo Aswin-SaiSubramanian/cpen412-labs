@@ -10,7 +10,6 @@
 // Copyright PJ Davies June 2020
 //////////////////////////////////////////////////////////////////////////////////////-
 
-`define MODELSIM 1'b1
 
 module M68kDramController_Verilog (
 			input Clock,								// used to drive the state machine- stat changes occur on positive edge
@@ -70,10 +69,6 @@ module M68kDramController_Verilog (
 		reg  [5:0]counter;
 		reg  [3:0]nopCounter;
 
-`ifdef MODELSIM
-		reg [15:0] temp_SDram_DQ;
-`endif		
-
 		// 5 bit Commands to the SDRam
 
 		parameter PoweringUp = 5'b00000 ;					// take CKE & CS low during power up phase, address and bank address = dont'care
@@ -119,7 +114,7 @@ module M68kDramController_Verilog (
 
 		parameter AutorefreshPrecharge = 5'h0B;
 		parameter AutorefreshNop = 5'h0C;
-		parameter Autorefresh = 5'h0D;
+		parameter AutorefreshState = 5'h0D;
 		parameter AutorefreshNopCycle = 5'h0E;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,25 +186,13 @@ module M68kDramController_Verilog (
 			// when you are writing, you have to drive them to the value of SDramWriteData so that you 'present' your data to the dram chips
 			// of course during a write, the dram WE signal will need to be driven low and it will respond by tri-stating its outputs lines so you can drive data in to it
 			// remember the Dram chip has bi-directional data lines, when you read from it, it turns them on, when you write to it, it turns them off (tri-states them)
-
-`ifdef MODELSIM
-			if(FPGAWritingtoSDram_H == 1) 			// if CPU is doing a write, we need to turn on the FPGA data out lines to the SDRam and present Dram with CPU data 
-				temp_SDram_DQ	<= SDramWriteData ;
-			else
-				temp_SDram_DQ	<= 16'bZZZZZZZZZZZZZZZZ;			// otherwise tri-state the FPGA data output lines to the SDRAM for anything other than writing to it
-`else 
 			if(FPGAWritingtoSDram_H == 1) 			// if CPU is doing a write, we need to turn on the FPGA data out lines to the SDRam and present Dram with CPU data 
 				SDram_DQ	<= SDramWriteData ;
 			else
 				SDram_DQ	<= 16'bZZZZZZZZZZZZZZZZ;			// otherwise tri-state the FPGA data output lines to the SDRAM for anything other than writing to it
-`endif
 			DramState <= CurrentState ;					// output current state - useful for debugging so you can see you state machine changing states etc
 		end
 	end	
-	
-`ifdef MODELSIM
-	assign SDram_DQ = temp_SDram_DQ;
-`endif
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////-
 // Concurrent process to Latch Data from Sdram after Cas Latency during read
@@ -343,8 +326,7 @@ module M68kDramController_Verilog (
 		else if (CurrentState == ProgramModeRegister) begin
 			Command <= ModeRegisterSet;
 
-			SDram_Addr <= 13'h220; // present mode data on dram address bus
-			nopCounter <= 0;
+			DramAddress <= 13'h220; // present mode data on dram address bus
 
 			NextState <= ProgramModeRegisterNop;
 		end
@@ -388,12 +370,11 @@ module M68kDramController_Verilog (
 		else if (CurrentState == AutorefreshNop) begin
 			Command <= NOP;
 
-			NextState <= Autorefresh;
+			NextState <= AutorefreshState;
 		end
 
-		else if (CurrentState == Autorefresh) begin
+		else if (CurrentState == AutorefreshState) begin
 			Command <= AutoRefresh;
-			nopCounter <= 0;
 
 			NextState <= AutorefreshNopCycle;
 		end
