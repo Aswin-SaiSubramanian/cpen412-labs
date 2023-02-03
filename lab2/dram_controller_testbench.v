@@ -40,7 +40,7 @@ module dram_controller_testbench();
         refreshtimerloadcount = 0;
         while (refreshtimerloadcount < 3'd2) begin
             #10;
-            if (DramState == 5'h09) begin // LoadRefreshTimer
+            if (DramState == 5'h0F) begin // LoadRefreshTimer
                 refreshtimerloadcount = refreshtimerloadcount + 1;
             end
         end
