@@ -45,6 +45,10 @@ module Dtack_Generator_Verilog (
 			
 			if(CanBusSelect_H == 1)					// if canbus is being selected and for example it needed wait states
 				DtackOut_L <= CanBusDtack_L;		// copy the dtack signal from the can controller and give this as the dtack to the 68k
+
+
+			if(DramSelect_H == 1)					// if dram is being selected and for example it needed wait states
+				DtackOut_L <= DramDtack_L;		// copy the dtack signal from the dram controller and give this as the dtack to the 68k
 		end
 	end
 endmodule

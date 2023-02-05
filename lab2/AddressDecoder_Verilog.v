@@ -39,6 +39,9 @@ module AddressDecoder_Verilog (
 		// add other decoder signals here as we work through assignments and labs
 		//
 		
+		// dram address
+		if(Address[31:26] == 6'b1111_00) // address hex F000 0000 - F3FF FFFF   1111 0000 0000 0000 0000 0000 0000 0000 to 1111 0011 1111 1111 1111 1111 1111 1111
+			DramSelect_H <= 1;
 		
 		
 		
