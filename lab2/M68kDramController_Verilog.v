@@ -116,6 +116,14 @@ module M68kDramController_Verilog (
 		parameter AutorefreshNopCycle = 5'h0E;
 		parameter LoadRefreshTimer = 5'h0F;
 
+		parameter WriteDram = 5'h10;
+		parameter WriteDramWait = 5'h11;
+
+		parameter ReadDram = 5'h12;
+		parameter ReadDramWait = 5'h13;
+
+		parameter CpuWait = 5'h14;
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // General Timer for timing and counting things: Loadable and counts down on each clock then produced a TimerDone signal and stops counting
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -366,8 +374,20 @@ module M68kDramController_Verilog (
 
 			if (RefreshTimerDone_H == 1'b1) begin
 				NextState <= AutorefreshPrecharge;
-			end
-			else begin
+
+			end else if (DramSelect_L == 1'b0 && AS_L == 1'b0) begin // CPU is accessing DRAM
+				DramAddress <= Address[23:11]; // issue a 13 bit row address to SDRAM from CPU
+				BankAddress <= Address[25:24]; // issue a 2 bit bank address to the SDRAM
+				Command <= BankActivate; // issue a bank activate command to the SDRAM
+
+				if (WE_L == 1'b1) begin // CPU is reading
+					NextState <= ReadDram;
+
+				end else begin // CPU is writing
+					NextState <= WriteDram;
+				end
+
+			end else begin
 				NextState <= IdleState;
 			end
 		end
@@ -408,6 +428,64 @@ module M68kDramController_Verilog (
 			RefreshTimerLoad_H <= 1'b1;	
 			
 			NextState <= IdleState;
+		end
+
+		else if (CurrentState == WriteDram) begin
+			if (UDS_L == 1'b0 || LDS_L == 1'b0) begin // if UDS or LDS (or both) go low
+				DramAddress <= {3'b001, Address[10:1]}; // issue 10 bit column address
+				BankAddress <= Address[25:24]; // issue 2 bit bank address
+				Command <= WriteAutoPrecharge; // issue writeautoprecharge cmd
+				CPU_Dtack_L <= 1'b0; // issue CPU_Dtack_L
+				FPGAWritingtoSDram_H <= 1'b1; // turn on sdram bi-directional data lines
+				SDramWriteData <= DataIn; // copy CPU data out into sdram data in
+				NextState <= WriteDramWait;
+
+			end else begin
+				NextState <= WriteDram;
+			end
+		end
+
+		else if (CurrentState == WriteDramWait) begin
+			CPU_Dtack_L <= 1'b0; // keep issuing Dtack
+			Command <= NOP; // NOP
+			FPGAWritingtoSDram_H <= 1'b1; // Keep driving bidirectional lines to sdram
+			SDramWriteData <= DataIn; // keep presenting data to sdram
+			NextState <= CpuWait;
+		end
+
+		else if (CurrentState == ReadDram) begin
+			DramAddress <= {3'b001, Address[10:1]}; // issue 10 bit column address
+			BankAddress <= Address[25:24]; // issue 2 bit bank address to sdram
+			Command <= ReadAutoPrecharge; // issue readautoprecharge
+			TimerLoad_H <= 1'b1; // issue timer load signal
+			TimerValue <= 16'd2; // set timer value to 2
+
+			//CPU_Dtack_L <= 1'b0; // ???
+
+			NextState <= ReadDramWait;
+		end
+
+		else if (CurrentState == ReadDramWait) begin
+			CPU_Dtack_L <= 1'b0; // keep issuing dtack
+			Command <= NOP; // NOP
+			DramDataLatch_H <= 1'b1; // enable data latch to capture output from sdram
+
+			if (TimerDone_H == 1'b1) begin // timer expired
+				NextState <= CpuWait;
+			end else begin
+				NextState <= ReadDramWait;
+			end
+		end
+
+		else if (CurrentState == CpuWait) begin
+			Command <= NOP; // NOP
+
+			if (UDS_L == 1'b0 || LDS_L == 1'b0) begin // not finished bus cycle
+				CPU_Dtack_L <= 1'b0; // keep issuing dtack
+				NextState <= CpuWait;
+			end else begin
+				NextState <= IdleState;
+			end
 		end
 
 		
