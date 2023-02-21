@@ -1,3 +1,14 @@
+#include <stdio.h>
+
+/*************************************************************
+** Flash Commands
+**************************************************************/
+#define FLASH_ERASE_SECTOR 0x20
+#define FLASH_READ_DATA 0x03
+#define FLASH_PAGE_PROGRAM 0x02
+#define FLASH_WRITE_ENABLE 0x06
+#define FLASH_GET_STATUS_REGISTER1 0x05
+
 /*************************************************************
 ** SPI Controller registers
 **************************************************************/
@@ -15,7 +26,7 @@
 
 #define   Enable_SPI_CS()             SPI_CS = 0xFE
 #define   Disable_SPI_CS()            SPI_CS = 0xFF 
-9
+
 // masks to extract various bits of the status register
 #define SPSR_SPIF 0x80 // status register interrupt flag
 #define SPSR_WCOL 0x40 // status register write collision flag
@@ -113,10 +124,160 @@ int WriteSPIChar(int c) // int: 32 bits
     // modify '0' below to return back read byte from data register
     //
     
-    return SPDR_READBUF;                   
+    return SPDR_READBUF;
 }
 
+/******************************************************************************************
+** The following code is for the flash chip
+*******************************************************************************************/
+// Get the status of the flash chip before issuing a new command
+int flashGetStatus(void)
+{
+    // busy bit is bit 0 of the first status register
+    volatile int status = WriteSPIChar(FLASH_GET_STATUS_REGISTER1) & 0x01;
+
+    return status == 0;
+}
+
+// Execute the write enable command for the flash chip
+void flashWriteEnable(void)
+{
+    Enable_SPI_CS();
+    WriteSPIChar(FLASH_WRITE_ENABLE);
+    Disable_SPI_CS();
+    while(!flashgetStatus());
+}
+
+// Expects pageAddress to be 3 bytes
+void writeAddressToFlash(unsigned int pageAddress)
+{
+    WriteSPIChar((pageAddress & 0x00FF0000) >> 16);
+    WriteSPIChar((pageAddress & 0x0000FF00) >> 8);
+    WriteSPIChar(pageAddress & 0x000000FF);
+}
+
+// Erases a sector (4 kbytes: 16 pages) of flash
+void flashEraseSector(unsigned int sectorAddress) 
+{
+    // Poll flash chip for status
+    while(!flashgetStatus());
+
+    // enable write
+    flashWriteEnable();
+
+    // write erase sector command
+    Enable_SPI_CS();
+    WriteSPIChar(FLASH_ERASE_SECTOR);
+
+    // write address to chip
+    writeAddressToFlash(sectorAddress);
+
+    Disable_SPI_CS();
+
+    // Poll flash chip for status
+    while(!flashgetStatus());
+}
+
+// Writes the provided data to a page of flash memory. Length of dataToWrite should be 256 bytes (1 page)
+void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
+{
+    // Poll flash chip for status
+    while(!flashgetStatus());
+
+    // enable write
+    flashWriteEnable();
+
+    // write write page command
+    Enable_SPI_CS();
+    WriteSPIChar(FLASH_PAGE_PROGRAM);
+
+    // write address to chip
+    writeAddressToFlash(pageAddress);
+
+    // write each byte to the SPI controller
+    unsigned char i;
+    unsigned int result;
+    for(int i = 0; i < 256; i++) {
+        WriteSPIChar(dataToWrite[i]);
+    }
+
+    Disable_SPI_CS();
+
+    // Poll flash chip for status
+    while(!flashgetStatus());
+}
+
+// Read the provided page of flash memory into the provided buffer.  Buffer should be minimum 256 bytes.
+void flashReadPage(unsigned int pageAddress, unsigned char *dataBuf)
+{
+    // Poll flash chip for status
+    while(!flashgetStatus());
+
+    Enable_SPI_CS();
+
+    // write read data command
+    WriteSPIChar(FLASH_READ_DATA);
+
+    // write address to chip
+    writeAddressToFlash(pageAddress);
+
+    // read each byte by writing garbage data to controller
+    unsigned char i = 0;
+    for(i = 0; i < 256; i++) {
+        dataBuf[i] = WriteSPIChar(0xFF);
+    }
+
+    Disable_SPI_CS();
+
+    // Poll flash chip for status
+    while(!flashgetStatus());
+}
+
+// Compare 256 bytes of 2 buffers
+// If they are not the same, returns the index at which the comparison fails.
+// Otherwise, returns -1.
+int compareBuffers(unsigned char *buf1, unsigned char *buf2)
+{
+    int i;
+    for(int i = 0; i < 256; i++) {
+        if (buf1[i] != buf2[i])
+            return i;
+    }
+
+    return -1;
+}
+
+// Attempting to write 256kB of data to the flash chip, starting at address 0
+// Then, read it back
 void main(void) 
 {
+    int pageNum, sectorNum, result;
+    unsigned char dataBuf[256] = {0};
+
+    // Test data for writing flash pages
+    unsigned char page1[256] = {0};
+    unsigned char page2[256] = {0};
+
     SPI_Init();
+
+    // Erase 256kB (64 4kB sectors) from the flash, sector by sector
+    for(sectorNum = 0; sectorNum < 64; sectorNum++) {
+        flashEraseSector(sectorNum);
+    }
+
+    // Write 256kB to the flash chip in 256byte chunks
+    for(pageNum = 0; pageNum < 1000; pageNum++) {
+        flashWritePage(pageNum, (pageNum % 2 == 0 ? page1 : page2));
+    }
+
+    // Read back the entire program page by page, comparing to the data originally written to ensure correctness
+    for(pageNum = 0; pageNum < 1000; pageNum++) { 
+        flashReadPage(pageNum, dataBuf);
+
+        // compare to the page originally written
+        result = compareBuffers(dataBuf, (pageNum % 2 == 0 ? page1 : page2));
+        if (result != -1)
+            printf("Compare failed on page %d at byte %d\n", pageNum, result);
+    }
+
 }
