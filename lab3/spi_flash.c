@@ -1,5 +1,16 @@
 #include <stdio.h>
 
+
+/*********************************************************************************************
+**	RS232 port addresses
+*********************************************************************************************/
+
+#define RS232_Control     *(volatile unsigned char *)(0x00400040)
+#define RS232_Status      *(volatile unsigned char *)(0x00400040)
+#define RS232_TxData      *(volatile unsigned char *)(0x00400042)
+#define RS232_RxData      *(volatile unsigned char *)(0x00400042)
+#define RS232_Baud        *(volatile unsigned char *)(0x00400044)
+
 /*************************************************************
 ** Flash Commands
 **************************************************************/
@@ -51,6 +62,44 @@
 #define SPDR_WRITEBUF (SPI_Data)
 #define SPDR_READBUF (SPI_Data + 1)
 
+/*********************************************************************************************************
+**  Subroutine to provide a low level output function to 6850 ACIA
+**  This routine provides the basic functionality to output a single character to the serial Port
+**  to allow the board to communicate with HyperTerminal Program
+**
+**  NOTE you do not call this function directly, instead you call the normal putchar() function
+**  which in turn calls _putch() below). Other functions like puts(), printf() call putchar() so will
+**  call _putch() also
+*********************************************************************************************************/
+
+int _putch( int c)
+{
+    while((RS232_Status & (char)(0x02)) != (char)(0x02))    // wait for Tx bit in status register or 6850 serial comms chip to be '1'
+        ;
+
+    RS232_TxData = (c & (char)(0x7f));                      // write to the data register to output the character (mask off bit 8 to keep it 7 bit ASCII)
+    return c ;                                              // putchar() expects the character to be returned
+}
+
+/*********************************************************************************************************
+**  Subroutine to provide a low level input function to 6850 ACIA
+**  This routine provides the basic functionality to input a single character from the serial Port
+**  to allow the board to communicate with HyperTerminal Program Keyboard (your PC)
+**
+**  NOTE you do not call this function directly, instead you call the normal getchar() function
+**  which in turn calls _getch() below). Other functions like gets(), scanf() call getchar() so will
+**  call _getch() also
+*********************************************************************************************************/
+int _getch( void )
+{
+    char c ;
+    while((RS232_Status & (char)(0x01)) != (char)(0x01))    // wait for Rx bit in 6850 serial comms chip status register to be '1'
+        ;
+
+    return (RS232_RxData & (char)(0x7f));                   // read received character, mask off top bit and return as 7 bit ASCII character
+}
+
+
 /******************************************************************************************
 ** The following code is for the SPI controller
 *******************************************************************************************/
@@ -60,7 +109,11 @@
 int TestForSPITransmitDataComplete(void)    {
 
     /* TODO replace 0 below with a test for status register SPIF bit and if set, return true */
-    return (SPI_Status & SPSR_SPIF) == SPSR_SPIF;
+    int spi_status = SPI_Status;
+    // printf("Checking for SPI controller's completion of data transmission.\n");
+    // printf("SPI controller's status register: %d\n", spi_status);
+    // printf("Interrupt flag: %d\n", spi_status & SPSR_SPIF);
+    return (spi_status & SPSR_SPIF) != SPSR_SPIF;
 }
 
 /************************************************************************************
@@ -82,7 +135,7 @@ void SPI_Init(void)
     SPI_Ext = !SPER_ESPR & !SPER_ICNT;
 
     // SPI_CS Reg      - control selection of slave SPI chips via their CS# signals
-    Enable_SPI_CS();
+    // Enable_SPI_CS();
 
     // Status Reg      - status of SPI controller chip and used to clear any write collision and interrupt on transmit complete flag
     SPI_Status |= SPSR_SPIF;
@@ -115,6 +168,7 @@ int WriteSPIChar(int c) // int: 32 bits
 
     // wait for completion of transmission
     WaitForSPITransmitComplete();
+    // printf("SPI controller has finished transmitting a char to the flash memory.\n");
 
     // return the received data from Flash chip (which may not be relevent depending upon what we are doing)
     // by reading fom the SPI controller Data Register.
@@ -130,11 +184,17 @@ int WriteSPIChar(int c) // int: 32 bits
 /******************************************************************************************
 ** The following code is for the flash chip
 *******************************************************************************************/
+
 // Get the status of the flash chip before issuing a new command
 int flashGetStatus(void)
 {
+    volatile int status;
+
+    // printf("Querying status of flash chip.\n");
     // busy bit is bit 0 of the first status register
-    volatile int status = WriteSPIChar(FLASH_GET_STATUS_REGISTER1) & 0x01;
+    status = WriteSPIChar(FLASH_GET_STATUS_REGISTER1);
+    // printf("Flash chip status register 1:%d.\n", status);
+    status &= 0x80;
 
     return status == 0;
 }
@@ -145,7 +205,7 @@ void flashWriteEnable(void)
     Enable_SPI_CS();
     WriteSPIChar(FLASH_WRITE_ENABLE);
     Disable_SPI_CS();
-    while(!flashgetStatus());
+    while(!flashGetStatus());
 }
 
 // Expects pageAddress to be 3 bytes
@@ -160,7 +220,8 @@ void writeAddressToFlash(unsigned int pageAddress)
 void flashEraseSector(unsigned int sectorAddress) 
 {
     // Poll flash chip for status
-    while(!flashgetStatus());
+    while(!flashGetStatus());
+    printf("Flash chip ready to erase. \n");
 
     // enable write
     flashWriteEnable();
@@ -175,14 +236,17 @@ void flashEraseSector(unsigned int sectorAddress)
     Disable_SPI_CS();
 
     // Poll flash chip for status
-    while(!flashgetStatus());
+    while(!flashGetStatus());
 }
 
 // Writes the provided data to a page of flash memory. Length of dataToWrite should be 256 bytes (1 page)
 void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
 {
+    unsigned char i;
+    unsigned int result;
+
     // Poll flash chip for status
-    while(!flashgetStatus());
+    while(!flashGetStatus());
 
     // enable write
     flashWriteEnable();
@@ -195,23 +259,23 @@ void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
     writeAddressToFlash(pageAddress);
 
     // write each byte to the SPI controller
-    unsigned char i;
-    unsigned int result;
-    for(int i = 0; i < 256; i++) {
+    for(i = 0; i < 256; i++) {
         WriteSPIChar(dataToWrite[i]);
     }
 
     Disable_SPI_CS();
 
     // Poll flash chip for status
-    while(!flashgetStatus());
+    while(!flashGetStatus());
 }
 
 // Read the provided page of flash memory into the provided buffer.  Buffer should be minimum 256 bytes.
 void flashReadPage(unsigned int pageAddress, unsigned char *dataBuf)
 {
+    unsigned char i = 0;
+
     // Poll flash chip for status
-    while(!flashgetStatus());
+    while(!flashGetStatus());
 
     Enable_SPI_CS();
 
@@ -222,7 +286,6 @@ void flashReadPage(unsigned int pageAddress, unsigned char *dataBuf)
     writeAddressToFlash(pageAddress);
 
     // read each byte by writing garbage data to controller
-    unsigned char i = 0;
     for(i = 0; i < 256; i++) {
         dataBuf[i] = WriteSPIChar(0xFF);
     }
@@ -230,7 +293,7 @@ void flashReadPage(unsigned int pageAddress, unsigned char *dataBuf)
     Disable_SPI_CS();
 
     // Poll flash chip for status
-    while(!flashgetStatus());
+    while(!flashGetStatus());
 }
 
 // Compare 256 bytes of 2 buffers
@@ -239,7 +302,7 @@ void flashReadPage(unsigned int pageAddress, unsigned char *dataBuf)
 int compareBuffers(unsigned char *buf1, unsigned char *buf2)
 {
     int i;
-    for(int i = 0; i < 256; i++) {
+    for(i = 0; i < 256; i++) {
         if (buf1[i] != buf2[i])
             return i;
     }
@@ -259,16 +322,20 @@ void main(void)
     unsigned char page2[256] = {0};
 
     SPI_Init();
+    printf("\nSPI initialization completed!\n");
 
     // Erase 256kB (64 4kB sectors) from the flash, sector by sector
     for(sectorNum = 0; sectorNum < 64; sectorNum++) {
         flashEraseSector(sectorNum);
+        printf("Flash sector %d erased.\n", sectorNum);
     }
+    printf("Flash sectors erased.\n");
 
     // Write 256kB to the flash chip in 256byte chunks
     for(pageNum = 0; pageNum < 1000; pageNum++) {
         flashWritePage(pageNum, (pageNum % 2 == 0 ? page1 : page2));
     }
+    printf("Flash chip written.\n");
 
     // Read back the entire program page by page, comparing to the data originally written to ensure correctness
     for(pageNum = 0; pageNum < 1000; pageNum++) { 
@@ -279,5 +346,7 @@ void main(void)
         if (result != -1)
             printf("Compare failed on page %d at byte %d\n", pageNum, result);
     }
+
+    printf("Flash Memory Test completed!\n");
 
 }
