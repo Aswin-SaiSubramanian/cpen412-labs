@@ -146,7 +146,6 @@ void WaitForSPITransmitComplete(void)
 
     // once transmission is complete, clear the write collision and interrupt on transmit complete flags in the status register (read documentation)
     // just in case they were set
-    // SPI_Status = SPI_Status | SPSR_SPIF | SPSR_WCOL;
     SPI_Status |= SPSR_SPIF;
     SPI_Status |= SPSR_WCOL;
 }
@@ -158,14 +157,11 @@ void WaitForSPITransmitComplete(void)
 ************************************************************************************/
 int WriteSPIChar(int c) // int: 32 bits
 {
-    // printf("Write FIFO full flag: %d, read FIFO full flag: %d\n", SPI_Status & SPSR_WFFULL, SPI_Status & SPSR_RFFULL);
-    printf("Status reg: %x\n", SPI_Status);
     // todo - write the byte in parameter 'c' to the SPI data register, this will start it transmitting to the flash device
     SPI_Data = (unsigned char) c;
 
     // wait for completion of transmission
     WaitForSPITransmitComplete();
-    printf("SPI controller has finished transmitting a char to the flash memory.\n");
 
     // return the received data from Flash chip (which may not be relevent depending upon what we are doing)
     // by reading fom the SPI controller Data Register.
@@ -187,14 +183,12 @@ void flashWaitForIdle(void)
 {
     volatile int status = 1;
     Enable_SPI_CS();
-    // printf("Querying status of flash chip.\n");
     // busy bit is bit 0 of the first status register
     status = WriteSPIChar(FLASH_GET_STATUS_REGISTER1);
-    printf("first status: %d\n", status);
 
     while (status != 0) {
         status = WriteSPIChar(123);
-        printf("Status register: %x\n", status);
+        // printf("Flash chip status register 1: %x\n", status);
         status &= 0x01;
     }  
     Disable_SPI_CS();
@@ -341,36 +335,36 @@ void main(void)
 
     // check for manufacturer id to confirm we can talk to the chip
     // flashWaitForIdle();
-    printf("Got past wait for idle\n");
-    Enable_SPI_CS();
-    WriteSPIChar(FLASH_GET_MANUFACTURER_ID);
-    writeAddressToFlash(0);
-    printf("Manufacturer ID: %x (should be 0xEF)\n", WriteSPIChar(0xEF));
-    printf("Device ID: %x (should be 0x15)\n", WriteSPIChar(0x15));
-    Disable_SPI_CS();
+    // printf("Got past wait for idle\n");
+    // Enable_SPI_CS();
+    // WriteSPIChar(FLASH_GET_MANUFACTURER_ID);
+    // writeAddressToFlash(0);
+    // printf("Manufacturer ID: %x (should be 0xEF)\n", WriteSPIChar(0xFF));
+    // printf("Device ID: %x (should be 0x15)\n", WriteSPIChar(0xFF));
+    // Disable_SPI_CS();
 
     // Erase 256kB (64 4kB sectors) from the flash, sector by sector (4kB = 2^12 = 4096)
-    // for(sectorNum = 0; sectorNum < 64; sectorNum++) {
-    //     flashEraseSector(sectorNum * 4096);
-    //     printf("Flash sector %d erased.\n", sectorNum);
-    // }
-    // printf("Flash sectors erased.\n");
+    for(sectorNum = 0; sectorNum < 1; sectorNum++) {
+        flashEraseSector(sectorNum * 4096);
+        printf("Flash sector %d erased.\n", sectorNum);
+    }
+    printf("Flash sectors erased.\n");
 
-    // // Write 256kB to the flash chip in 256byte chunks
-    // for(pageNum = 0; pageNum < 1; pageNum++) { // was 1000
-    //     flashWritePage(pageNum * 256, page1);//(pageNum % 2 == 0 ? page1 : page2));
-    // }
-    // printf("Flash chip written.\n");
+    // Write 256kB to the flash chip in 256byte chunks
+    for(pageNum = 0; pageNum < 1; pageNum++) { // was 1000
+        flashWritePage(pageNum * 256, page1);//(pageNum % 2 == 0 ? page1 : page2));
+    }
+    printf("Flash chip written.\n");
 
-    // // Read back the entire program page by page, comparing to the data originally written to ensure correctness
-    // for(pageNum = 0; pageNum < 1; pageNum++) { // was 1000
-    //     flashReadPage(pageNum * 256, dataBuf);
+    // Read back the entire program page by page, comparing to the data originally written to ensure correctness
+    for(pageNum = 0; pageNum < 1; pageNum++) { // was 1000
+        flashReadPage(pageNum * 256, dataBuf);
 
-    //     // compare to the page originally written
-    //     result = compareBuffers(dataBuf, page1);//(pageNum % 2 == 0 ? page1 : page2));
-    //     if (result != -1)
-    //         printf("Compare failed on page %d at byte %d: Expected: %d Read: %d\n", pageNum, result, page1[result], dataBuf[result]);
-    // }
+        // compare to the page originally written
+        result = compareBuffers(dataBuf, page1);//(pageNum % 2 == 0 ? page1 : page2));
+        if (result != -1)
+            printf("Compare failed on page %d at byte %d: Expected: %d Read: %d\n", pageNum, result, page1[result], dataBuf[result]);
+    }
 
     printf("Flash Memory Test completed!\n");
 
