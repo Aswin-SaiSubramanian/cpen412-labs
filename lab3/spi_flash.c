@@ -263,7 +263,8 @@ void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
 }
 
 // Read the provided page of flash memory into the provided buffer.  Buffer should be minimum 256 bytes.
-void flashReadPage(unsigned int pageAddress, unsigned char *dataBuf)
+// The parameter numBytes should be within range 1-256, inclusive.
+void flashRead(unsigned int pageAddress, unsigned char *dataBuf, unsigned int numBytes)
 {
     unsigned int i = 0;
 
@@ -279,7 +280,7 @@ void flashReadPage(unsigned int pageAddress, unsigned char *dataBuf)
     writeAddressToFlash(pageAddress);
 
     // read each byte by writing garbage data to controller
-    for(i = 0; i < 256; i++) {
+    for(i = 0; i < numBytes; i++) {
         dataBuf[i] = WriteSPIChar(0xFF);
     }
 
@@ -347,7 +348,7 @@ void main(void)
 
     // Read back the entire program page by page, comparing to the data originally written to ensure correctness
     for(pageNum = 0; pageNum < 1000; pageNum++) { // was 1000
-        flashReadPage(pageNum * 256, dataBuf);
+        flashRead(pageNum * 256, dataBuf, 256);
 
         // compare to the page originally written
         result = compareBuffers(dataBuf, (pageNum % 2 == 0 ? page1 : page2));
