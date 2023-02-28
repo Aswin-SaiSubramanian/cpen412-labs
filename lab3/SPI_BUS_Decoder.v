@@ -19,7 +19,7 @@ always@(*) begin
 	//  AS_L must be included in decoder decision making to make sure only 1 clock edge seen by 
 	// SPI controller per 68k read/write. You don’t have to do anything more.
 
-    // 0000_0000_0010_0000_1000_0000_0010_0000 to 0000_0000_0100_0000_1000_0000_0010_1111
+    // 0000_0000_0100_0000_1000_0000_0010_0000 to 0000_0000_0100_0000_1000_0000_0010_1111
     if (({AS_L, SPI_Select_H} == 2'b01) && (Address[15:4] == 12'h802)) begin
         SPI_Enable_H <= 1'b1;
 	end
