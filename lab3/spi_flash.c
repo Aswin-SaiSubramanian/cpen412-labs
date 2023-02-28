@@ -216,20 +216,16 @@ void flashEraseSector(unsigned int sectorAddress)
 {
     // Poll flash chip for status
     flashWaitForIdle();
-    printf("Flash chip ready to erase. \n");
 
     // enable write
     flashWriteEnable();
-    printf("Enabled write for erase\n");
 
     // write erase sector command
     Enable_SPI_CS();
     WriteSPIChar(FLASH_ERASE_SECTOR);
-    printf("Wrote flash erase sector cmd\n");
 
     // write address to chip
     writeAddressToFlash(sectorAddress);
-    printf("Wrote address to be erased\n");
 
     Disable_SPI_CS();
 
@@ -247,23 +243,18 @@ void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
 
     // enable write
     flashWriteEnable();
-    printf("Enabled write\n");
 
     // write write page command
     Enable_SPI_CS();
     WriteSPIChar(FLASH_PAGE_PROGRAM);
-    printf("Wrote write cmd\n");
 
     // write address to chip
     writeAddressToFlash(pageAddress);
-    printf("Wrote address\n");
 
     // write each byte to the SPI controller
     for(i = 0; i < 256; i++) {
         tmp = WriteSPIChar(dataToWrite[i]);
-        printf("wrote %d to character %d, received %d\n", dataToWrite[i], i);
     }
-    printf("Wrote data\n");
 
     Disable_SPI_CS();
 
@@ -305,9 +296,8 @@ int compareBuffers(unsigned char *buf1, unsigned char *buf2)
 {
     int i;
     for(i = 0; i < 256; i++) {
-        printf("Buf1 at byte %d: %d    Buf2 at byte %d: %d\n", i, buf1[i], i, buf2[i]);
-        // if (buf1[i] != buf2[i])
-        //     return i;
+        if (buf1[i] != buf2[i])
+            return i;
     }
 
     return -1;
@@ -344,26 +334,25 @@ void main(void)
     // Disable_SPI_CS();
 
     // Erase 256kB (64 4kB sectors) from the flash, sector by sector (4kB = 2^12 = 4096)
-    for(sectorNum = 0; sectorNum < 1; sectorNum++) {
+    for(sectorNum = 0; sectorNum < 64; sectorNum++) {
         flashEraseSector(sectorNum * 4096);
-        printf("Flash sector %d erased.\n", sectorNum);
     }
     printf("Flash sectors erased.\n");
 
     // Write 256kB to the flash chip in 256byte chunks
-    for(pageNum = 0; pageNum < 1; pageNum++) { // was 1000
-        flashWritePage(pageNum * 256, page1);//(pageNum % 2 == 0 ? page1 : page2));
+    for(pageNum = 0; pageNum < 1000; pageNum++) { // was 1000
+        flashWritePage(pageNum * 256, (pageNum % 2 == 0 ? page1 : page2));
     }
     printf("Flash chip written.\n");
 
     // Read back the entire program page by page, comparing to the data originally written to ensure correctness
-    for(pageNum = 0; pageNum < 1; pageNum++) { // was 1000
+    for(pageNum = 0; pageNum < 1000; pageNum++) { // was 1000
         flashReadPage(pageNum * 256, dataBuf);
 
         // compare to the page originally written
-        result = compareBuffers(dataBuf, page1);//(pageNum % 2 == 0 ? page1 : page2));
+        result = compareBuffers(dataBuf, (pageNum % 2 == 0 ? page1 : page2));
         if (result != -1)
-            printf("Compare failed on page %d at byte %d: Expected: %d Read: %d\n", pageNum, result, page1[result], dataBuf[result]);
+            printf("Compare failed on page %d at byte %d: Expected: %d Read: %d\n", pageNum, result, (pageNum % 2 == 0 ? page1[result] : page2[result]), dataBuf[result]);
     }
 
     printf("Flash Memory Test completed!\n");
