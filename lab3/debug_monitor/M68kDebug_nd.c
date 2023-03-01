@@ -543,11 +543,10 @@ void flashWaitForIdle(void)
     volatile int status = 1;
     Enable_SPI_CS();
     // busy bit is bit 0 of the first status register
-    status = WriteSPIChar(FLASH_GET_STATUS_REGISTER1);
+    WriteSPIChar(FLASH_GET_STATUS_REGISTER1);
 
     while (status != 0) {
         status = WriteSPIChar(123);
-        // printf("Flash chip status register 1: %x\n", status);
         status &= 0x01;
     }  
     Disable_SPI_CS();
@@ -595,7 +594,7 @@ void flashEraseSector(unsigned int sectorAddress)
 // Writes the provided data to a page of flash memory. Length of dataToWrite should be 256 bytes (1 page)
 void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
 {
-    unsigned int i, result, tmp;
+    unsigned int i, result;
 
     // Poll flash chip for status
     flashWaitForIdle();
@@ -612,7 +611,7 @@ void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
 
     // write each byte to the SPI controller
     for(i = 0; i < 256; i++) {
-        tmp = WriteSPIChar(dataToWrite[i]);
+        WriteSPIChar(dataToWrite[i]);
     }
 
     Disable_SPI_CS();
@@ -676,15 +675,22 @@ void ProgramFlashChip(void)
 
     // Ram pointer
     unsigned char* ramPtr = DramStart;
+    
     unsigned int pageNum, sectorNum;
     int result;
     unsigned char dataBuf[256] = {0};
 
     // Erase 256kB (64 4kB sectors) from the flash, sector by sector (4kB = 2^12 = 4096)
+    // sectorNum = 0 --> flash address is 0x000000
+    // sectorNum = 1 --> flash address is 0x001000
+    // sectorNum = 2 --> flash address is 0x002000
+    // ...
+    // sectorNum = 63 --> flash address is 0x03f000
+    // erase the range 0x00000-0x3ffff
     for(sectorNum = 0; sectorNum < 64; sectorNum++) {
-        flashEraseSector(sectorNum * 4096);
+        flashEraseSector(sectorNum*4096);
     }
-    printf("Flash sectors erased.\n");
+    printf("\nFlash sectors erased.\n");
 
     // Write 256kB to the flash chip in 256byte chunks
     for(pageNum = 0; pageNum < 1000; pageNum++) { 
@@ -697,7 +703,7 @@ void ProgramFlashChip(void)
         flashRead(pageNum * 256, dataBuf, 256);
 
         // compare to the page originally written
-        result = compareBuffers(dataBuf, ramPtr + (pageNum * 256));
+        result = compareBuffers(dataBuf, ramPtr + (pageNum * 256));      
         if (result != -1)
             printf("Compare failed on page %d at byte %d: Expected: %x Read: %x\n", pageNum, result, *(ramPtr + (pageNum * 256)), dataBuf[result]);
     }
@@ -708,11 +714,20 @@ void ProgramFlashChip(void)
 **************************************************************************/
 void LoadFromFlashChip(void)
 {
+    // Ram pointer
+    unsigned char* ramPtr = DramStart;
+
+    unsigned int pageNum;
+
     printf("\r\nLoading Program From SPI Flash....") ;
 
     //
     // TODO : put your code here to read 256k of data from SPI flash chip and store in user ram starting at hex 08000000
     //
+
+    for(pageNum = 0; pageNum < 1000; pageNum++) { 
+        flashRead(pageNum * 256, ramPtr + (pageNum * 256), 256);
+    }
 
 }
 
