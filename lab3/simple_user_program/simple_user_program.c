@@ -1,5 +1,15 @@
 #include <stdio.h>
 
+/*********************************************************************************************
+**	RS232 port addresses
+*********************************************************************************************/
+
+#define RS232_Control     *(volatile unsigned char *)(0x00400040)
+#define RS232_Status      *(volatile unsigned char *)(0x00400040)
+#define RS232_TxData      *(volatile unsigned char *)(0x00400042)
+#define RS232_RxData      *(volatile unsigned char *)(0x00400042)
+#define RS232_Baud        *(volatile unsigned char *)(0x00400044)
+
 /*********************************************************************************************************
 **  Subroutine to provide a low level output function to 6850 ACIA
 **  This routine provides the basic functionality to output a single character to the serial Port
@@ -40,5 +50,6 @@ int _getch( void )
 // User program which announces itself
 void main(void)
 {
-    printf("\nHello World!  This is a sample user program that has been downloaded to flash memory.\n");
+    printf("\nHello World! This is a sample user program that has been loaded from flash memory.\n");
+    while(1);
 }
