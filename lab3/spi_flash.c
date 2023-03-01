@@ -184,11 +184,10 @@ void flashWaitForIdle(void)
     volatile int status = 1;
     Enable_SPI_CS();
     // busy bit is bit 0 of the first status register
-    status = WriteSPIChar(FLASH_GET_STATUS_REGISTER1);
+    WriteSPIChar(FLASH_GET_STATUS_REGISTER1);
 
     while (status != 0) {
         status = WriteSPIChar(123);
-        // printf("Flash chip status register 1: %x\n", status);
         status &= 0x01;
     }  
     Disable_SPI_CS();
@@ -236,7 +235,7 @@ void flashEraseSector(unsigned int sectorAddress)
 // Writes the provided data to a page of flash memory. Length of dataToWrite should be 256 bytes (1 page)
 void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
 {
-    unsigned int i, result, tmp;
+    unsigned int i, result;
 
     // Poll flash chip for status
     flashWaitForIdle();
@@ -253,7 +252,7 @@ void flashWritePage(unsigned int pageAddress, unsigned char *dataToWrite)
 
     // write each byte to the SPI controller
     for(i = 0; i < 256; i++) {
-        tmp = WriteSPIChar(dataToWrite[i]);
+        WriteSPIChar(dataToWrite[i]);
     }
 
     Disable_SPI_CS();
@@ -311,6 +310,11 @@ void main(void)
     unsigned char functionality = 0, dataSelect = 0;
     unsigned int start_addr, data1 = 0xDEADBEEF, data2 = 0x12345678, flash_start = 0x0, flash_end = 0x???;//TODO
 
+    /*
+    0x000_000 - 0xfff_fff
+    0x1000_000
+    */
+
     unsigned char dataBuf[256];
     for (i = 0; i < 256; i++) {
         dataBuf[i] = 0;
@@ -329,7 +333,7 @@ void main(void)
     // Ask for start addr
     printf("\r\nEnter the start address to read or write to (in range [0x%x, 0x%x]): ", flash_start, flash_end);
     scanf("%x", &start_addr);
-    if (start addr < || start_addr > ) // TODO
+    if (start_addr < flash_start || start_addr > flash_end) // TODO
         goto early_exit;
 
     // perform the read or write
