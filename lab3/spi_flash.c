@@ -308,16 +308,18 @@ void main(void)
 {
     int i;
     unsigned char functionality = 0, dataSelect = 0;
-    unsigned int start_addr, data1 = 0xDEADBEEF, data2 = 0x12345678, flash_start = 0x0, flash_end = 0x???;//TODO
-
-    /*
-    0x000_000 - 0xfff_fff
-    0x1000_000
-    */
+    unsigned int start_addr, flash_start = 0x0, flash_end = 0x3FFFF, pageNum;
 
     unsigned char dataBuf[256];
     for (i = 0; i < 256; i++) {
         dataBuf[i] = 0;
+    }
+
+    unsigned int data1Arr[64];
+    unsigned int data2Arr[64];
+    for (i = 0; i < 64; i++) {
+        data1Arr[i] = 0xDEADBEEF;
+        data2Arr[i] = 0x12345678;
     }
 
     // spi init
@@ -331,30 +333,57 @@ void main(void)
         goto early_exit;
 
     // Ask for start addr
-    printf("\r\nEnter the start address to read or write to (in range [0x%x, 0x%x]): ", flash_start, flash_end);
+    printf("\r\nEnter the start address to read or write to (in range [0x%x, 0x%x], sector-aligned if reading or writing to a sector): ", flash_start, flash_end);
     scanf("%x", &start_addr);
-    if (start_addr < flash_start || start_addr > flash_end) // TODO
+    if (start_addr < flash_start)
         goto early_exit;
+
+    // check sector alignment if reading or writing to a sector
+    if (functionality == 2 || functionality == 3) {
+        if ((start_addr % 4096) != 0)
+            goto early_exit;
+    }
 
     // perform the read or write
     switch(functionality) {
         case 1: // read a byte
+            if (start_addr > flash_end)
+                goto early_exit;
+
             flashRead(start_addr, dataBuf, 1);
             printf("\r\nByte read at address 0x%x: %x", start_addr, dataBuf[0]);
             break;
 
-        case 2: // read a sector (is this supposed to be a page?)
-            flashRead(start_addr, dataBuf, 256);
-            printf("\r\nSector read beginning at address 0x%x: ", start_addr);//TODO
-            //print data
+        case 2: // read a sector
+            if (start_addr > (flash_end - 4096))
+                goto early_exit;
+
+            printf("\r\nSector read beginning at address 0x%x: ", start_addr);
+            for (pageNum = 0; pageNum < 16; pageNum++) {
+                flashRead(start_addr, dataBuf, 256);
+                // print data byte by byte
+                printf("\r\n");
+                for (i = 0; i < 256; i++) {
+                    printf("%x ", dataBuf[i]);
+                }
+            }
             break;
 
-        case 3: // write a sector (is this supposed to be a page?)
+        case 3: // write a sector
+            if (start_addr > (flash_end - 4096))
+                goto early_exit;
+
             printf("\r\nSelect some repeating data to be written to the flash [1 = 0xDEADBEEF, 2 = 0x12345678]: ");
             scanf("%u", &dataSelect);
-            flashWritePage(start_addr, dataBuf, dataSelect == 1 ? data1 : data2);
-            printf("\r\nData has been written starting at address %x", start_addr);
 
+            flashEraseSector(start_addr);
+
+            for (pageNum = 0; pageNum < 16; pageNum++) {
+                flashWritePage(start_addr + (pageNum * 256), dataSelect == 1 ? data1Arr : data2Arr);
+                printf("\r\nData has been written starting at address %x", start_addr);
+            }
+            break;
+            
         default:
             printf("\r\nSomething went very wrong...");
     }
