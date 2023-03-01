@@ -304,59 +304,56 @@ int compareBuffers(unsigned char *buf1, unsigned char *buf2)
     return -1;
 }
 
-// Attempting to write 256kB of data to the flash chip, starting at address 0
-// Then, read it back
+// Prompt user to interact with flash memory
 void main(void) 
 {
-    int pageNum, sectorNum, result, i;
-    unsigned char tmpResult;
+    int i;
+    unsigned char functionality = 0, dataSelect = 0;
+    unsigned int start_addr, data1 = 0xDEADBEEF, data2 = 0x12345678, flash_start = 0x0, flash_end = 0x???;//TODO
 
-    unsigned char dataBuf[256] = {0};
-
-    // Test data for writing flash pages
-    unsigned char page1[256] = {0};
-    unsigned char page2[256] = {0};
+    unsigned char dataBuf[256];
     for (i = 0; i < 256; i++) {
-        page1[i] = i;
-        page2[i] = 255 - i;
+        dataBuf[i] = 0;
     }
 
+    // spi init
     SPI_Init();
-    printf("\nSPI initialization completed!\n");
 
-    // check for manufacturer id to confirm we can talk to the chip
-    // flashWaitForIdle();
-    // printf("Got past wait for idle\n");
-    // Enable_SPI_CS();
-    // WriteSPIChar(FLASH_GET_MANUFACTURER_ID);
-    // writeAddressToFlash(0);
-    // printf("Manufacturer ID: %x (should be 0xEF)\n", WriteSPIChar(0xFF));
-    // printf("Device ID: %x (should be 0x15)\n", WriteSPIChar(0xFF));
-    // Disable_SPI_CS();
+    // 3 options: read byte, read sector, write sector
+    scanflush();
+    printf("\r\nWelcome to the flash memory user program! Please select the functionality to be tested [1 = read a byte, 2 = read a sector, 3 = write a sector]: ");
+    scanf("%u", &functionality);
+    if (functionality != 1 && functionality != 2 && functionality != 3)
+        goto early_exit;
 
-    // Erase 256kB (64 4kB sectors) from the flash, sector by sector (4kB = 2^12 = 4096)
-    for(sectorNum = 0; sectorNum < 64; sectorNum++) {
-        flashEraseSector(sectorNum * 4096);
+    // Ask for start addr
+    printf("\r\nEnter the start address to read or write to (in range [0x%x, 0x%x]): ", flash_start, flash_end);
+    scanf("%x", &start_addr);
+    if (start addr < || start_addr > ) // TODO
+        goto early_exit;
+
+    // perform the read or write
+    switch(functionality) {
+        case 1: // read a byte
+            flashRead(start_addr, dataBuf, 1);
+            printf("\r\nByte read at address 0x%x: %x", start_addr, dataBuf[0]);
+            break;
+
+        case 2: // read a sector (is this supposed to be a page?)
+            flashRead(start_addr, dataBuf, 256);
+            printf("\r\nSector read beginning at address 0x%x: ", start_addr);//TODO
+            //print data
+            break;
+
+        case 3: // write a sector (is this supposed to be a page?)
+            printf("\r\nSelect some repeating data to be written to the flash [1 = 0xDEADBEEF, 2 = 0x12345678]: ");
+            scanf("%u", &dataSelect);
+            flashWritePage(start_addr, dataBuf, dataSelect == 1 ? data1 : data2);
+            printf("\r\nData has been written starting at address %x", start_addr);
+
+        default:
+            printf("\r\nSomething went very wrong...");
     }
-    printf("Flash sectors erased.\n");
 
-    // Write 256kB to the flash chip in 256byte chunks
-    for(pageNum = 0; pageNum < 1000; pageNum++) { // was 1000
-        flashWritePage(pageNum * 256, (pageNum % 2 == 0 ? page1 : page2));
-    }
-    printf("Flash chip written.\n");
-
-    // Read back the entire program page by page, comparing to the data originally written to ensure correctness
-    for(pageNum = 0; pageNum < 1000; pageNum++) { // was 1000
-        flashRead(pageNum * 256, dataBuf, 256);
-
-        // compare to the page originally written
-        result = compareBuffers(dataBuf, (pageNum % 2 == 0 ? page1 : page2));
-        if (result != -1)
-            printf("Compare failed on page %d at byte %d: Expected: %d Read: %d\n", pageNum, result, (pageNum % 2 == 0 ? page1[result] : page2[result]), dataBuf[result]);
-    }
-
-    printf("Flash Memory Test completed!\n");
-
-    while(1); // stop!!!
+    early_exit: printf("\r\nError");
 }
