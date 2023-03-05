@@ -173,8 +173,8 @@ module M68kCacheController_Verilog (
 		else if(CurrentState == Idle) begin	  							// if we are in the idle state				
 			if(AS_L == 1'b0 & DramSelect68k_H == 1'b1) begin
 				if(WE_L == 1'b1) begin // if a read is requested
-					UDS_L <= 1'b0; // activate UDS
-					LDS_L <= 1'b0; // activate LDS
+					UDS_DramController_L <= 1'b0; // activate UDS
+					LDS_DramController_L <= 1'b0; // activate LDS
 					NextState <= CheckForCacheHit;
 
 				end else begin // if a write is requested
@@ -194,8 +194,8 @@ module M68kCacheController_Verilog (
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		else if(CurrentState == CheckForCacheHit) begin	  			// if we are looking for Cache hit			
-			UDS_L <= 1'b0; // keep activating UDS
-			LDS_L <= 1'b0; // keep activating LDS
+			UDS_DramController_L <= 1'b0; // keep activating UDS
+			LDS_DramController_L <= 1'b0; // keep activating LDS
 
 			if(CacheHit_H == 1'b1 & ValidBitIn_H == 1'b1) begin // had a cache hit
 				WordAddress <= AddressBusInFrom68k[3:1]; // give the cache the correct word address from 68k
@@ -213,8 +213,8 @@ module M68kCacheController_Verilog (
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 		else if(CurrentState == WaitForEndOfCacheRead) begin		
-			UDS_L <= 1'b0; // keep activating UDS
-			LDS_L <= 1'b0; // keep activating LDS
+			UDS_DramController_L <= 1'b0; // keep activating UDS
+			LDS_DramController_L <= 1'b0; // keep activating LDS
 
 			WordAddress <= AddressBusInFrom68k[3:1]; // give cache line the correct word address from 68k
 			DtackTo68k_L <= 1'b0; // activate
@@ -245,8 +245,8 @@ module M68kCacheController_Verilog (
 			ValidBitOut_H <= 1'b1; // activate
 			ValidBit_WE_L <= 1'b0; // activate
 
-			UDS_L <= 1'b0; // activate
-			LDS_L <= 1'b0; // activate
+			UDS_DramController_L <= 1'b0; // activate
+			LDS_DramController_L <= 1'b0; // activate
 		end
 						
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -254,8 +254,8 @@ module M68kCacheController_Verilog (
 ///////////////////////////////////////////////////////////////////////////////////////
 			
 		else if(CurrentState == CASDelay1) begin						// wait for Dram case signal to go low
-			UDS_L <= 1'b0; // activate
-			LDS_L <= 1'b0; // activate
+			UDS_DramController_L <= 1'b0; // activate
+			LDS_DramController_L <= 1'b0; // activate
 
 			DramSelectFromCache_L <= 1'b0; // activate
 			DtackTo68k_L <= 1'b1; // deactivate
@@ -268,8 +268,8 @@ module M68kCacheController_Verilog (
 ///////////////////////////////////////////////////////////////////////////////////////
 			
 		else if(CurrentState == CASDelay2) begin						// wait for Dram case signal to go low
-			UDS_L <= 1'b0; // activate
-			LDS_L <= 1'b0; // activate
+			UDS_DramController_L <= 1'b0; // activate
+			LDS_DramController_L <= 1'b0; // activate
 
 			DramSelectFromCache_L <= 1'b0; // activate
 			DtackTo68k_L <= 1'b1; // deactivate
@@ -283,13 +283,13 @@ module M68kCacheController_Verilog (
 /////////////////////////////////////////////////////////////////////////////////////////////
 		
 		else if(CurrentState == BurstFill) begin						// wait for Dram case signal to go low
-			UDS_L <= 1'b0; // activate
-			LDS_L <= 1'b0; // activate
+			UDS_DramController_L <= 1'b0; // activate
+			LDS_DramController_L <= 1'b0; // activate
 
 			DramSelectFromCache_L <= 1'b0; // activate
 			DtackTo68k_L <= 1'b1; // deactivate
 
-			if(BurstCounter == 16'b8) begin // read 8 words, then stop
+			if(BurstCounter == 16'd8) begin // read 8 words, then stop
 				NextState <= EndBurstFill;
 
 			end else begin
@@ -306,8 +306,8 @@ module M68kCacheController_Verilog (
 			DramSelectFromCache_L <= 1'b1; // deactivate
 			DtackTo68k_L <= 1'b0; // activate
 
-			UDS_L <= 1'b0; // activate
-			LDS_L <= 1'b0; // activate
+			UDS_DramController_L <= 1'b0; // activate
+			LDS_DramController_L <= 1'b0; // activate
 
 			WordAddress <= AddressBusInFrom68k[3:1];
 			DataBusOutTo68k <= DataBusInFromCache; // get data from cache and give to CPU
