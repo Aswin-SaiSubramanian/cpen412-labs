@@ -1,0 +1,9 @@
+ASWIN
+no cache: 1min 45.57sec
+32 line cache: 1min 09.90sec
+512 line cache: 
+
+ALYSSA
+no cache: 1min 46.94sec
+32 line cache: 1min 10.88sec
+512 line cache: 1min 2.83sec
