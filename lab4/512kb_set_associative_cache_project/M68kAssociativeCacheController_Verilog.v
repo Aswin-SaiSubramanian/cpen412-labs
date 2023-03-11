@@ -430,7 +430,7 @@ module M68kAssociativeCacheController_Verilog (
 			AddressBusOutToDramController <= AddressBusInFrom68k;
 
 			DramSelectFromCache_L <= 1'b0; // activate
-			DtackTo68k_L = DtackFromDram_L;
+			DtackTo68k_L <= DtackFromDram_L;
 
 			// wait for 68k to terminate write
 			if (AS_L == 1'b1 | DramSelect68k_H == 1'b0) begin
