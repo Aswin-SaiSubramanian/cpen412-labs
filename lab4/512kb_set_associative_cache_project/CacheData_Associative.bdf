@@ -588,22 +588,6 @@ refer to the applicable agreement for further details.
 	(bus)
 )
 (connector
-	(pt 896 152)
-	(pt 896 200)
-	(bus)
-)
-(connector
-	(text "DataOut[15..0]" (rect 904 323 921 392)(font "Intel Clear" )(vertical))
-	(pt 896 200)
-	(pt 896 408)
-	(bus)
-)
-(connector
-	(pt 896 408)
-	(pt 896 424)
-	(bus)
-)
-(connector
 	(pt 528 232)
 	(pt 480 232)
 	(bus)
@@ -619,8 +603,21 @@ refer to the applicable agreement for further details.
 	(pt 480 144)
 	(bus)
 )
-(junction (pt 896 408))
-(junction (pt 896 200))
+(connector
+	(pt 896 152)
+	(pt 896 200)
+	(bus)
+)
+(connector
+	(pt 896 200)
+	(pt 896 408)
+	(bus)
+)
+(connector
+	(pt 896 408)
+	(pt 896 432)
+	(bus)
+)
 (junction (pt 400 200))
 (junction (pt 400 408))
 (junction (pt 496 488))
@@ -628,3 +625,5 @@ refer to the applicable agreement for further details.
 (junction (pt 480 144))
 (junction (pt 264 352))
 (junction (pt 480 232))
+(junction (pt 896 200))
+(junction (pt 896 408))

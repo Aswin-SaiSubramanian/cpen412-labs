@@ -2,7 +2,7 @@
 // Simple Associative Cache controller
 //
 // designed to work with TG68 (68000 based) cpu with 16 bit data bus and 32 bit address bus
-// separate upper and lowe data stobes for individual byte and also 16 bit word access
+// separate upper and lower data strobes for individual byte and also 16 bit word access
 //
 // Copyright PJ Davies August 2017
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +238,7 @@ module M68kAssociativeCacheController_Verilog (
 					ValidBitOut_H <= 1'b0;
 					
 					// if we have a hit, invalidate the corresponding line
-					ValidBit_WE_L <= ValidHit_H;
+					ValidBit_WE_L <= ~ValidHit_H;														// ASWIN: ADDED ~ BEFORE ValidHit_H
 
 					// bypass the cache to write
 					DramSelectFromCache_L <= 1'b0; // activate
